@@ -1,0 +1,850 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1b2430">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Russisk video</title>
+<meta name="theme-color" content="#0E131A">
+<style>
+:root{--bg:#EEF1F5;--surface:#fff;--ink:#172130;--muted:#5B6779;--line:#D3DAE3;--accent:#B12D25;--accent-ink:#fff;--new:#8FB3E0;--part:#D9B76A;--good:#2E7D4F;--hl:#FFE2A8;--newtxt:#1B6AB0;--parttxt:#9A6A00;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0E131A;--surface:#161D27;--ink:#E6EAF0;--muted:#97A2B3;--line:#293341;--accent:#E5594D;--accent-ink:#140D0C;--good:#5CC08A;--hl:#5B4516;--newtxt:#7CC4FF;--parttxt:#FFD36B;color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.wrap{max-width:44rem;margin:0 auto;padding:16px 16px 120px;display:flex;flex-direction:column;gap:18px}
+h1{font:700 1.8rem/1.2 Georgia,"PT Serif",serif;margin:0}
+h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.muted{color:var(--muted);font-size:13px;margin:0}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.btn{border:0;border-radius:12px;padding:12px 14px;background:var(--accent);color:var(--accent-ink);font-weight:600}
+.ghost{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 12px}
+input[type=text],input[type=url],textarea{width:100%;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 12px;min-width:0}
+textarea{min-height:120px;font-size:14px}
+.vcard{display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.vcard small{display:block;color:var(--muted);font-size:13px}
+/* watch view: this element goes fullscreen, so the popup lives inside it */
+#watch{display:flex;flex-direction:column;gap:10px;background:var(--bg)}
+#watch:fullscreen{background:#000;padding:0;justify-content:center}
+#stage{position:relative;aspect-ratio:16/9;background:#000;border-radius:12px;overflow:hidden}
+#watch:fullscreen #stage{border-radius:0;width:min(100vw,177.78vh);height:auto;margin:auto}
+/* The player is 170% as tall as the picture and centred: the 16:9 video stays full width in the middle, while YouTube's own title,
+   channel, share button, logo and «more videos» (which sit at the top/bottom edge of the player) fall outside the cropped stage. */
+#yt,#stage iframe{position:absolute;left:0;top:-35%;width:100%;height:170%;border:0}
+#cap{position:absolute;left:0;right:0;bottom:0;padding:8px 10px 12px;background:linear-gradient(transparent,rgba(0,0,0,.78) 30%);color:#fff;font:1.15rem/1.5 Georgia,"PT Serif",serif;text-align:center;min-height:2.4em}
+#watch:fullscreen #cap{font-size:clamp(1.3rem,4.6vh,2rem);padding:8px 8% 3.5%;background:linear-gradient(transparent,rgba(0,0,0,.88) 45%)}
+/* hides YouTube's own title/logo/«more videos» overlays while the video is paused */
+.navrow{display:flex;gap:8px}
+#watch:fullscreen .navrow{display:none}
+#cap .w,.ln .w{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#cap .w{padding:0 1px;border-radius:3px;cursor:pointer;pointer-events:auto;position:relative}
+#cap .w::after{content:"";position:absolute;left:-5px;right:-5px;top:-.45em;bottom:-.3em}   /* a bigger touch area than the letters */
+#cap .w.new{border-bottom:2px solid var(--new);color:#7CC4FF}
+#cap .w.part{border-bottom:2px solid var(--part);color:#FFD36B}
+#cap > span.now{background:rgba(255,255,255,.28);border-radius:4px;box-shadow:0 0 0 2px rgba(255,255,255,.28)}
+#cap .w.sv{text-decoration:underline dotted 2px;text-underline-offset:5px}
+#cap .w.sel{background:rgba(255,226,168,.35)}
+#tapzone{position:absolute;inset:0}
+#pbar{position:absolute;left:0;right:0;bottom:0;height:4px;background:rgba(255,255,255,.25);z-index:4;pointer-events:none}
+#pbar i{display:block;height:100%;width:0;background:#FFD36B}
+#ptime{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right;margin-top:-4px}
+#qRate[hidden],#quiz[hidden]{display:none}
+#qSent mark{background:none;color:var(--accent);font-weight:700;text-decoration:underline}
+#wtoast{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:6;background:rgba(0,0,0,.75);color:#fff;border-radius:999px;padding:6px 14px;font-size:15px;pointer-events:none;max-width:90%;text-align:center;white-space:nowrap}
+#wtoast[hidden]{display:none}
+#watch:fullscreen .ctl button[aria-pressed=true]{background:#FFD36B;color:#000;border-color:#FFD36B}
+.ctl button.hit{transform:scale(.9);filter:brightness(1.6)}
+#again{position:absolute;inset:0;z-index:5;background:rgba(0,0,0,.78);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;padding:12px 18px}
+#again[hidden]{display:none}
+#again span{font-size:14px;opacity:.85;max-width:26rem}
+#again button{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:9px 16px;font-size:16px;margin:4px}
+#stage iframe{pointer-events:none}   /* every tap goes to our layer, so YouTube's logo/title can never open the YouTube app */
+#cap{pointer-events:auto}
+.ctl{display:flex;gap:6px;flex-wrap:wrap}
+.ctl button{flex:1 1 0;min-width:44px;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 4px;font-size:16px}
+.ctl button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+/* fullscreen: slim button column on the right edge, hides itself while the video plays */
+#watch:fullscreen .ctl{position:absolute;right:max(8px,env(safe-area-inset-right));top:50%;transform:translateY(-50%);flex-direction:column;flex-wrap:wrap;max-height:92vh;gap:6px;width:auto;transition:opacity .25s}
+#watch:fullscreen .ctl button{flex:none;width:48px;height:42px;padding:0;font-size:17px;background:rgba(0,0,0,.55);color:#fff;border-color:rgba(255,255,255,.3);border-radius:12px}
+#watch:fullscreen #cSlow,#watch:fullscreen #cTr{font-size:12px}
+#cTr[hidden]{display:none}
+.trl{font:.85rem/1.35 system-ui,sans-serif;opacity:.8;margin-top:2px}
+.ln .trl{color:var(--muted)}
+#watch:fullscreen .ctl .lbl{display:none}
+#watch:fullscreen.idle .ctl{opacity:0;pointer-events:none}
+#watch:fullscreen #lines,#watch:fullscreen .whead{display:none}
+#lines{position:relative;display:flex;flex-direction:column;gap:2px;max-height:38vh;overflow-y:auto;border:1px solid var(--line);border-radius:12px;padding:6px}
+.ln{display:flex;gap:8px;align-items:baseline;padding:4px 6px;border-radius:8px}
+.ln.cur{background:var(--hl)}
+.ln .ts{flex:0 0 auto;font-size:12px;color:var(--accent);border:1px solid var(--line);border-radius:999px;padding:1px 8px;background:var(--surface);font-variant-numeric:tabular-nums}
+.ln .tx{font:1.08rem/1.6 Georgia,"PT Serif",serif}
+.ln .w.new{border-bottom:2px solid var(--new);color:var(--newtxt)}
+.ln .w.part{border-bottom:2px solid var(--part);color:var(--parttxt)}
+.pre{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 12px}
+.pre summary{font-weight:600;cursor:pointer}
+.pre .row{display:flex;gap:8px;align-items:baseline;padding:5px 0;border-top:1px solid var(--line)}
+.pre .row:first-of-type{border-top:0}
+.pre .rw{font:700 1.05rem Georgia,"PT Serif",serif}
+.pre .rg{flex:1;color:var(--muted);font-size:14px}
+.pre .rb{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:4px 9px;font-size:14px}
+.pre .rb[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.tile b{display:block;font-size:1.5rem}
+/* word popup */
+.hlrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#sheet{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;justify-content:flex-end;padding:0 10px calc(10px + env(safe-area-inset-bottom,0px))}
+#sheet[hidden]{display:none}
+#sheet .card{width:100%}
+.tl{font-size:15px;color:var(--muted);font-style:italic}
+#sheet .card{padding:10px 14px;gap:6px}
+#sheet .card .f{font-size:1.4rem;display:inline-block}
+#sheet .card .tl{display:inline-block;margin-left:10px}
+#sheet .card .g{font-size:1.02rem}
+#sheet .card .l{font-size:13px}
+#sheet .card .acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+@media (min-width:600px){
+  #sheet .card{max-width:58rem;display:grid;grid-template-columns:1fr auto;column-gap:16px;align-items:center}
+  #sheet .card .top{grid-column:1;grid-row:1}
+  #sheet .card #sAlt{grid-column:1;grid-row:2}
+  #sheet .card .acts{grid-column:2;grid-row:1 / span 2;flex-direction:column;align-items:stretch;margin-right:26px}
+  #sheet .card .acts .seg{justify-content:stretch}
+  #sheet .card .acts .seg button{flex:1}
+  #sheet .card .acts .row2{display:flex;gap:8px}
+  #sheet .card .acts .row2 button{flex:1;padding:8px 10px}
+  #sheet .card .x{position:absolute;top:6px;right:8px}
+}
+#sheet .card{position:relative}
+#sheet .card .row2{display:flex;gap:8px}
+#sheet .card .row2 button{white-space:nowrap}
+#watch:fullscreen #sheet{position:absolute}
+.card{max-width:40rem;margin:0 auto;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.card .top{display:flex;justify-content:space-between;gap:10px}
+.card .f{font:700 1.6rem/1.2 Georgia,"PT Serif",serif}
+.card .g{font-size:1.1rem;font-weight:600}
+.card .l{color:var(--muted);font-size:14px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;background:none;padding:8px 12px;font-weight:600}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.seg #mK[aria-pressed=true]{background:var(--good);color:#fff}
+.alt{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;padding:6px 10px;text-align:left;font-size:14px}
+.alt[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+#sAlt[hidden]{display:none}
+.x{border:0;background:none;font-size:24px;line-height:1;color:var(--muted)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;z-index:40;background:var(--ink);color:var(--bg);border-radius:999px;padding:8px 16px;font-size:14px;max-width:calc(100vw - 32px);text-align:center}
+.foot{font-size:12px;color:var(--muted)}
+.foot a{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="home">
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <header><h1>Russisk video</h1><p class="muted">YouTube med russisk tekst over videoen. Trykk på et ord for betydning; merk det som kjent eller lagre det til repetisjon i «Russisk hver dag».</p></header>
+      <p class="muted" id="loadMsg">Laster ordbok …</p>
+      <p id="syncBanner" hidden style="overflow-wrap:anywhere;margin:0;padding:10px 12px;border-radius:10px;background:#fdecea;color:#8a1f11;border:1px solid #e8b4ad"></p>
+      <section class="box" id="prog"><h2 style="margin:0 0 6px">Fremgang</h2><div class="tiles" id="progTiles"></div><p class="muted" id="progTxt" style="margin:8px 0 0"></p></section>
+      <div id="list" style="display:flex;flex-direction:column;gap:8px"></div>
+      <section class="box">
+        <h2>Legg til en video</h2>
+        <div style="display:flex;gap:8px"><input id="url" type="url" inputmode="url" placeholder="YouTube-lenke" style="flex:1 1 auto;min-width:0"><button class="ghost" id="pasteUrl" type="button">Lim inn</button></div>
+        <input id="title" type="text" placeholder="Tittel (valgfritt)">
+        <textarea id="tr" placeholder="Lim inn transkripsjonen med klokkeslett"></textarea>
+        <label class="muted" style="display:block"><input type="checkbox" id="merge" checked> Slå sammen undertekstbiter til hele setninger (anbefalt for setningsmodus)</label>
+        <label class="muted" style="display:block">…eller velg en undertekstfil (.srt / .vtt / .txt): <input id="trFile" type="file"></label>
+        <details><summary class="muted">Oversettelse (valgfritt)</summary><p class="muted">Lim inn en oversatt transkripsjon med klokkeslett (samme format). Den vises som liten linje under russisk tekst når du slår den på med «Aa». Standard er av, så russisk er hovedsporet.</p><textarea id="tr2" placeholder="Oversatt transkripsjon med klokkeslett"></textarea></details>
+        <details><summary class="muted">Slik får du transkripsjonen med klokkeslett</summary>
+          <p class="muted">Åpne videoen i nettleseren (ikke i YouTube-appen) → ⋮ → «Skrivebordsversjon». Under videoen: «…mer» → «Vis transkripsjon». Marker alt i transkripsjonen, kopier og lim inn her. Undertekstfiler (.srt/.vtt) fungerer også.</p></details>
+        <button class="btn" id="add">Legg til</button>
+        <p class="muted" id="addMsg"></p>
+      </section>
+      <section class="box">
+        <h2>Lagre i skyen (automatisk)</h2>
+        <p class="muted" id="syncInfo">Videoer, merkede ord og lagrede ord sikkerhetskopieres automatisk i ditt private GitHub-repo, så du ikke mister dem. Appen henter ordene i den ukentlige kjøringen.</p>
+        <label class="muted" style="display:block;margin-bottom:6px">Tokenet utløper <input id="syncExp" type="date" style="border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;padding:4px 8px;font:inherit"></label>
+        <div id="syncOff">
+          <input id="syncTok" type="password" autocomplete="off" placeholder="Token (github_pat_…)" aria-label="GitHub-token" style="width:100%;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:9px 12px;font:inherit;margin-bottom:8px">
+          <button class="ghost" id="syncOn">Slå på</button>
+        </div>
+        <div id="syncOnBox" hidden><button class="ghost" id="syncNowBtn">Synk nå</button> <button class="ghost" id="syncOffBtn">Slå av</button></div>
+      </section>
+      <p class="foot">Ordbok: <a href="https://en.openrussian.org" target="_blank" rel="noopener">OpenRussian.org</a> (CC BY-SA 4.0) og ordene fra «Russisk hver dag». Transkripsjonene lagres bare i denne nettleseren. Versjon 2026-11-26 07:40 UTC · 6ebb885.</p>
+    </div>
+  </div>
+
+  <div id="watchView" hidden>
+    <div id="watch">
+      <div class="whead"><h1 id="wTitle" style="font-size:1.3rem"></h1><p class="muted" id="wInfo"></p></div>
+      <div class="whead navrow"><button class="ghost" id="back" style="flex:1">← Videoene</button><a class="ghost" id="rvLink" target="_blank" rel="noopener" style="display:flex;align-items:center;padding:0 12px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:inherit" href="#">Åpne i YouTube-appen</a><button class="ghost" id="del">Fjern</button></div>
+      <div id="stage"><div id="yt"></div><div id="pbar" aria-hidden="true"><i></i></div><div id="tapzone" aria-hidden="true"></div><div id="wtoast" hidden></div><div id="again" hidden><b>Se igjen nå?</b><span>Studier tyder på at det hjelper å se klippet om igjen rett etter første gang. Ordene du har lagret er understreket.</span><div><button id="againGo">↻ Se igjen</button><button id="againNo">Nei takk</button></div></div><div id="cap" lang="ru"></div></div>
+      <div class="ctl">
+        <button id="cStart" aria-label="Tilbake til begynnelsen">⏮⏮</button>
+        <button id="cBack10" aria-label="10 sekunder tilbake">−10</button>
+        <button id="cPrev" aria-label="Forrige linje">⏮</button>
+        <button id="cPlay" aria-label="Spill / pause">⏯</button>
+        <button id="cRep" aria-label="Linjen igjen">↻</button>
+        <button id="cNext" aria-label="Neste linje">⏭</button>
+        <button id="cAuto" aria-pressed="false" aria-label="Pause etter hver linje">⏸︎<span class="lbl"> av</span></button>
+        <button id="cTr" aria-pressed="false" aria-label="Vis oversettelse" hidden>Aa</button>
+        <button id="cSlow" aria-pressed="false" aria-label="Saktere">0,75×</button>
+        <button id="cFull" aria-label="Fullskjerm">⛶</button>
+      </div>
+      <div id="ptime" class="whead">0:00 / 0:00</div>
+      <div class="whead hlrow"><label class="muted"><input type="checkbox" id="hlOn"> Uthev ordet som sies</label></div>
+      <div class="tiles whead"><div class="tile"><b id="wCov">–</b><span class="muted">av ordene kjenner du</span></div><div class="tile"><b id="wUnk">–</b><span class="muted">ukjente ordformer</span></div></div>
+      <section class="pre whead" id="quizBox"><button class="ghost" id="qStart" style="width:100%">Test ordene</button>
+        <div id="quiz" hidden>
+          <p class="muted" id="qProg" style="margin:0 0 6px"></p>
+          <div id="qSent" lang="ru" style="font:1.25rem/1.55 Georgia,'PT Serif',serif"></div>
+          <p class="muted" id="qHint" style="margin:6px 0"></p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ghost" id="qClip">▶ Hør linjen</button><button class="btn" id="qShow">Vis ordet</button></div>
+          <div id="qRate" hidden style="display:flex;gap:8px;margin-top:8px"><button class="ghost" id="qNo" style="flex:1">Glemte</button><button class="btn" id="qYes" style="flex:1">Husket</button></div>
+          <button class="ghost" id="qEnd" style="margin-top:8px">Avslutt testen</button>
+        </div></section>
+      <details class="pre whead" id="pre"><summary id="preSum">Nye ord i videoen</summary><p class="muted" id="preTxt" style="margin:6px 0"></p><div id="preList" lang="ru"></div><button class="ghost" id="preAll" style="margin-top:6px">Øv alle viste</button></details>
+      <div id="lines" lang="ru"></div>
+      <div id="sheet" hidden>
+        <div class="card" role="dialog">
+          <div class="top"><div><div class="f" id="sF" lang="ru"></div><div class="tl" id="sT"></div><div class="g" id="sG"></div><div class="l" id="sL" lang="ru"></div></div><button class="x" id="sX" aria-label="Lukk">×</button></div>
+          <div id="sAlt" hidden style="display:flex;flex-direction:column;gap:4px"></div>
+          <div class="acts">
+            <div class="seg"><button id="mU" aria-pressed="false">Ukjent</button><button id="mP" aria-pressed="false">Delvis</button><button id="mK" aria-pressed="false">Kjent</button></div>
+            <div class="row2"><button class="ghost" id="sHear">🔊 Hør ordet</button><button class="ghost" id="sSave">＋ Øv</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script>
+const $ = id => document.getElementById(id);
+const ACUTE = "́";
+const LS = {get(k, d){ try { const v = localStorage.getItem("rv:" + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+            set(k, v){ try { localStorage.setItem("rv:" + k, JSON.stringify(v)); } catch (e) {} }};
+let DICT = {lemmas: [], forms: {}}, KNOWN = {}, PUBLIC = {}, PASTED = {};
+let videos = LS.get("videos", {}), marks = LS.get("marks", {}), saved = LS.get("saved", {});
+let cur = null, player = null, ytReady = false, idx = -1, poll = null, pmode = LS.get("pmode", LS.get("auto", false) ? "all" : "off"), calcIdx = -9, slow = false, stopAt = null, resume = false, selForm = null;
+function toast(t){ const el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 1600);
+  const w = $("wtoast"); if (w) { w.textContent = t; w.hidden = false; clearTimeout(toast.w); toast.w = setTimeout(() => w.hidden = true, 1400); } }
+
+/* ---------- words ---------- */
+const WORD_RE = /[А-Яа-яЁё]+(?:-[А-Яа-яЁё]+)*/g;
+function toks(s){ const out = []; let m; WORD_RE.lastIndex = 0; while ((m = WORD_RE.exec(s))) out.push({w: m[0], i: m.index}); return out; }
+const strip = s => (s || "").replace(/́/g, "").toLowerCase();
+function entries(f){ return DICT.forms[f] || DICT.forms[f.replace(/ё/g, "е")] || []; }
+let knownLemmas = new Set();
+function rebuildKnown(){
+  knownLemmas = new Set();
+  Object.entries(KNOWN).forEach(([f, v]) => { if (v.s === 1) knownLemmas.add(strip(v.l)); });
+  Object.entries(marks).forEach(([f, s]) => { if (s === 1) entries(f).forEach(([li]) => knownLemmas.add(strip(DICT.lemmas[li][0]))); });
+}
+function state(f){                                   // 1 known, 2 partly, 0 unknown
+  if (f in marks) return marks[f];
+  if (KNOWN[f]) return KNOWN[f].s;
+  const e = entries(f);
+  if (e.length && knownLemmas.has(strip(DICT.lemmas[e[0][0]][0]))) return 1;   // another form of a word you know
+  return 0;
+}
+function isName(t, k){ return t.w[0] !== t.w[0].toLowerCase() && k > 0 && !entries(t.w.toLowerCase()).length; }
+let tapT = null, tapF = "";
+function holdWord(f, sp){
+  const row = sp.closest(".ln"), i = row ? [...$("lines").children].indexOf(row) : idx;
+  if (saved[f]) { delete saved[f]; toast(f + " · fjernet fra øving"); }
+  else { saveWord(f, i); toast(f + " · lagret til øving ✓"); }
+  try { navigator.vibrate && navigator.vibrate(25); } catch (e) {}
+  LS.set("saved", saved); renderCap(); renderLines(); renderPre(); if (!$("sheet").hidden && selForm === f) openWord(f);
+}
+function dblTap(f){
+  if (state(f) === 1 && marks[f] === 1) { toast("«" + f + "» er allerede kjent"); return; }
+  marks[f] = 1; delete saved[f];
+  LS.set("marks", marks); LS.set("saved", saved); rebuildKnown();
+  closeWord(); renderCap(); renderLines(); renderStats(); renderPre();
+  toast("«" + f + "» kjent ✓ (angre: trykk én gang → Ukjent)");
+}
+function wordSpan(t, k, onTap){
+  const f = t.w.toLowerCase(), sp = document.createElement("span");
+  if (isName(t, k)) { sp.textContent = t.w; return sp; }
+  const st = state(f);
+  sp.className = "w" + (st === 0 ? " new" : st === 2 ? " part" : "") + (saved[f] ? " sv" : ""); sp.dataset.f = f; sp.dataset.k = k; sp.textContent = t.w;
+  let holdT = null, held = false, x0 = 0, y0 = 0;   // hold the finger on a word (½ s) = save it for practice (again = remove)
+  sp.addEventListener("pointerdown", ev => { held = false; x0 = ev.clientX; y0 = ev.clientY; clearTimeout(holdT);
+    holdT = setTimeout(() => { holdT = null; held = true; clearTimeout(tapT); tapT = null; tapF = ""; holdWord(f, sp); }, 500); });
+  sp.addEventListener("pointermove", ev => { if (holdT && Math.hypot(ev.clientX - x0, ev.clientY - y0) > 10) { clearTimeout(holdT); holdT = null; } });
+  ["pointerup", "pointercancel", "pointerleave"].forEach(n => sp.addEventListener(n, () => { clearTimeout(holdT); holdT = null; }));
+  sp.addEventListener("contextmenu", ev => ev.preventDefault());
+  sp.addEventListener("click", ev => {
+    ev.stopPropagation();
+    if (held) { held = false; return; }
+    if (tapT && tapF === f) { clearTimeout(tapT); tapT = null; tapF = ""; dblTap(f); return; }   // double tap: known / not known
+    clearTimeout(tapT); tapF = f;
+    tapT = setTimeout(() => { tapT = null; tapF = ""; onTap(f, sp); }, 400);   // the popup opens only when no second tap follows (in fullscreen it would cover the caption)
+  });
+  return sp;
+}
+function fillLine(el, s, onTap){
+  el.textContent = ""; let last = 0;
+  toks(s).forEach((t, k) => { el.append(s.slice(last, t.i)); last = t.i + t.w.length; el.append(wordSpan(t, k, onTap)); });
+  el.append(s.slice(last));
+}
+
+/* ---------- transcripts ---------- */
+const secOf = s => { const p = s.replace(",", ".").split(":").map(Number); return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p[0] * 60 + p[1]; };
+const fmt = t => { t = Math.floor(t); const h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = t % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0"); };
+function parse(raw){
+  const src = String(raw || "").replace(/\r/g, "").split("\n").map(x => x.trim());
+  const lines = []; let pend = null, pendE = null;
+  const TS = /^(?:\d{1,2}:)?\d{1,2}:\d{2}(?:[.,]\d{1,3})?$/, TS2 = /^((?:\d{1,2}:)?\d{1,2}:\d{2}(?:[.,]\d{1,3})?)\s+(\S.*)$/, CUE = /^(\d{1,2}:\d{2}:\d{2}[.,]\d{3}|\d{1,2}:\d{2}[.,]\d{3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[.,]\d{3}|\d{1,2}:\d{2}[.,]\d{3})?/;
+  for (let l of src) {
+    l = l.replace(/^[\[(]\s*((?:\d{1,2}:)?\d{1,2}:\d{2}(?:[.,]\d{1,3})?)\s*[\])][\s\-–—:]*/, "$1 ").trim();   // «[00:02] tekst», «(0:02) tekst»
+    if (!l || l === "WEBVTT" || /^\d+$/.test(l) || /^(NOTE|Kind:|Language:)/.test(l)) continue;
+    let m;
+    if ((m = l.match(CUE))) { pend = secOf(m[1]); pendE = m[2] ? secOf(m[2]) : null; continue; }
+    if (TS.test(l)) { pend = secOf(l); pendE = null; continue; }
+    let t = pend, s = l.replace(/<[^>]+>/g, "");
+    if ((m = s.match(TS2))) { t = secOf(m[1]); s = m[2]; }
+    if (t == null) { if (lines.length) lines[lines.length - 1].s += " " + s; continue; }
+    if (pend == null && lines.length && lines[lines.length - 1].t === t) { lines[lines.length - 1].s += " " + s; continue; }
+    lines.push(pendE != null && pend != null ? {t, s, e: pendE} : {t, s}); pend = null; pendE = null;
+  }
+  return lines.filter(L => toks(L.s).length);
+}
+/* subtitle files cut sentences into 2-3 second pieces. Joined into whole sentences (up to a full stop, «?» or «!», a pause longer than 1.2 s, or 12 s),
+   a line becomes a real sentence: it starts at the first piece and ends where the last piece ends. */
+const VOW = /[аеёиоуыэюяaeiouy]/gi;
+function wordTimes(text, t0, t1){
+  const tk = toks(text); if (!tk.length || !(t1 > t0)) return tk.map(() => t0);
+  const wt = tk.map((x, k) => { const after = text.slice(x.i + x.w.length, k + 1 < tk.length ? tk[k + 1].i : text.length); return Math.max(1, (x.w.match(VOW) || []).length) + (/[.!?…]/.test(after) ? 1.2 : /[,;:—–-]/.test(after) ? 0.6 : 0); });
+  const sum = wt.reduce((a, b) => a + b, 0); let acc = 0;
+  return wt.map(w => { const at = t0 + (t1 - t0) * acc / sum; acc += w; return Math.round(at * 100) / 100; });
+}
+function mergeSentences(lines){
+  const out = []; let cur = null;
+  const flush = () => { if (cur) { out.push(cur); cur = null; } };
+  lines.forEach((L, i) => {
+    if (cur && (L.t - (cur.e != null ? cur.e : cur.t) > 1.2 || (L.e != null && L.e - cur.t > 12))) flush();
+    const w = L.e != null ? wordTimes(L.s, L.t, L.e) : null;
+    if (!cur) cur = {t: L.t, s: L.s, e: L.e, w: w || []}; else { cur.s += " " + L.s; if (L.e != null) cur.e = L.e; cur.w = cur.w.concat(w || []); }
+    if (/[.!?…]["»”)]*$/.test(L.s.trim())) flush();
+  });
+  flush(); out.forEach(L => { if (L.w.length !== toks(L.s).length) delete L.w; }); return out;
+}
+const ytId = u => { const m = String(u || "").match(/(?:youtu\.be\/|[?&]v=|\/shorts\/|\/live\/|\/embed\/)([A-Za-z0-9_-]{11})/); return m ? m[1] : null; };
+
+/* ---------- home ---------- */
+function analyze(v){
+  let total = 0, known = 0; const unk = new Set(), open = new Set();
+  v.lines.forEach(L => toks(L.s).forEach((t, k) => { if (isName(t, k)) return; const f = t.w.toLowerCase(); total++; if (state(f) === 1) known++; else { unk.add(f); if (!(f in marks)) open.add(f); } }));
+  return {pct: total ? Math.round(known / total * 100) : 0, unk: unk.size, open: open.size};
+}
+/* progress: known words, time watched (counted while the video plays), words waiting for practice, coverage of the videos */
+let watchLog = LS.get("watch", {}), watchDirty = 0, rewatch = LS.get("rewatch", {});
+function addWatch(sec){ const d = new Date().toISOString().slice(0, 10); watchLog[d] = (watchLog[d] || 0) + sec; watchDirty += sec; if (watchDirty >= 10) { watchDirty = 0; LS.set("watch", watchLog); } }
+function renderProg(){
+  const vs = Object.values(videos), an = vs.map(analyze), known = new Set(Object.keys(KNOWN).filter(f => KNOWN[f] && KNOWN[f].s === 1));
+  Object.entries(marks).forEach(([f, st]) => { if (st === 1) known.add(f); else known.delete(f); });
+  const days = Object.keys(watchLog).sort(), tot = days.reduce((a, d) => a + watchLog[d], 0), wk = days.filter(d => (Date.now() - new Date(d)) / 864e5 < 7).reduce((a, d) => a + watchLog[d], 0);
+  const avg = an.length ? Math.round(an.reduce((a, x) => a + x.pct, 0) / an.length) : 0;
+  const T = [[known.size, "kjente ordformer"], [Math.round(wk / 60) + " min", "sett siste 7 dager"], [Object.keys(saved).length, "ord venter på øving"], [an.length ? avg + " %" : "–", "snitt dekning i videoene"]];
+  const box = $("progTiles"); box.textContent = "";
+  T.forEach(([v, k]) => { const d = document.createElement("div"); d.className = "tile"; d.innerHTML = "<b></b><span class='muted'></span>"; d.firstChild.textContent = v; d.lastChild.textContent = k; box.append(d); });
+  $("progTxt").textContent = vs.length ? vs.length + " video(er) lagt til, " + Math.round(tot / 60) + " min sett totalt, " + Object.values(rewatch).reduce((a, b) => a + b, 0) + " gjenseing(er). Dekningen går opp etter hvert som du kjenner flere ord." : "Legg til en video for å komme i gang.";
+}
+function renderHome(){
+  renderProg();
+  const box = $("list"); box.textContent = "";
+  Object.values(videos).sort((a, b) => (b.added || "").localeCompare(a.added || "")).forEach(v => {
+    const a = analyze(v), b = document.createElement("button"); b.className = "vcard";
+    b.innerHTML = "<span><b></b><small></small></span><span>›</span>";
+    b.querySelector("b").textContent = v.title; b.querySelector("small").textContent = (a.open ? "minst " : "") + a.pct + " % kjente ord · " + a.unk + " ukjente ordformer" + (a.open ? " · " + a.open + " ikke sjekket" : " · sjekket ✓");
+    b.addEventListener("click", () => openWatch(v.id)); box.append(b);
+  });
+}
+$("pasteUrl").addEventListener("click", async () => {     // YouTube → Del → Kopier lenke, then one tap here
+  try { const t = await navigator.clipboard.readText(), id = ytId(t); if (id) { $("url").value = "https://www.youtube.com/watch?v=" + id; $("addMsg").textContent = "Lenken er limt inn."; } else $("addMsg").textContent = "Fant ingen YouTube-lenke i utklippstavlen."; }
+  catch (e) { $("addMsg").textContent = "Kunne ikke lese utklippstavlen. Hold fingeren i feltet og velg «Lim inn»."; }
+});
+$("trFile").addEventListener("change", async () => {
+  const f = $("trFile").files[0]; if (!f) return; const txt = await f.text(), n = parse(txt).length, m = mergeSentences(parse(txt)).length;
+  const notRu = n < 2 && /-->|\d:\d\d/.test(txt) && /[A-Za-z]{3}/.test(txt) && !/[А-Яа-яЁё]/.test(txt);
+  if (notRu) {      // an English (or other) subtitle file: it cannot be the Russian text, but it works as the translation line
+    $("tr2").value = txt; const d = $("tr2").closest("details"); if (d) d.open = true;
+    $("addMsg").textContent = "«" + f.name + "» er ikke på russisk, så jeg la den inn som oversettelse. Velg nå den russiske undertekstfilen (eller lim inn russisk tekst) i feltet over.";
+    if (!$("title").value.trim()) $("title").value = f.name.replace(/\.[^.]+$/, ""); return;
+  }
+  $("tr").value = txt; $("addMsg").textContent = n >= 2 ? "Leste «" + f.name + "»: " + n + " biter" + ($("merge").checked && m < n ? " → " + m + " setninger" : "") + ". Trykk «Legg til»." : "Fant ingen linjer med klokkeslett i «" + f.name + "».";
+  if (!$("title").value.trim()) $("title").value = f.name.replace(/\.[^.]+$/, "");
+});
+$("add").addEventListener("click", () => {
+  const vid = ytId($("url").value.trim()), msg = $("addMsg"); let lines = parse($("tr").value);
+  if ($("merge").checked && lines.some(L => L.e != null)) lines = mergeSentences(lines);
+  if (!vid) { msg.textContent = "Jeg kjente ikke igjen YouTube-lenken."; return; }
+  if (lines.length < 2) {
+    const raw = $("tr").value, noRu = /[A-Za-z]{3}/.test(raw) && !/[А-Яа-яЁё]/.test(raw);
+    msg.textContent = noRu ? "Teksten du limte inn er ikke på russisk. Jeg trenger den russiske underteksten (på YouTube: velg russisk under undertekster, eller bruk en nedlaster som lar deg velge språk). Den engelske kan du legge i «Oversettelse»."
+      : "Fant ingen linjer med klokkeslett. Lim inn transkripsjonen med klokkeslett (se forklaringen under feltet).";
+    return;
+  }
+  const tl = parse($("tr2").value); if (tl.length) lines = alignTr(lines, tl);
+  if (gone.includes(vid)) { gone = gone.filter(x => x !== vid); LS.set("gone", gone); }
+  if (!revived.includes(vid)) { revived.push(vid); LS.set("revived", revived); }
+  videos[vid] = {id: vid, vid, title: $("title").value.trim() || "Video " + vid, lines, added: new Date().toISOString()};
+  LS.set("videos", videos); $("tr2").value = ""; $("url").value = ""; $("tr").value = ""; $("title").value = ""; msg.textContent = "";
+  openWatch(vid);
+});
+/* ---------- watching ---------- */
+function rvHref(){ const t = Math.max(0, Math.floor((cur && cur.lines[Math.max(0, idx)] ? cur.lines[Math.max(0, idx)].t : 0) || 0)); return "https://www.youtube.com/watch?v=" + cur.vid + "&t=" + t + "s"; }
+/* test the words of this video (saved or partly known): a sentence with a gap and the meaning as cue; two correct answers in a row = known.
+   Recall tests give larger benefits than recognition tests (Rowland 2014). */
+let vq = LS.get("vq", {}), qq = [], qCur = null;
+function testable(){
+  const seen = new Set(), out = [];
+  cur.lines.forEach((L, i) => toks(L.s).forEach((t, k) => { if (isName(t, k)) return; const f = t.w.toLowerCase(); if (seen.has(f)) return; if (saved[f] || marks[f] === 2) { seen.add(f); out.push({f, i}); } }));
+  return out;
+}
+function qNext(){
+  qCur = qq.shift(); if (!qCur) { $("quiz").hidden = true; $("qStart").hidden = false; renderPre(); renderQuizBtn(); toast("Testen er ferdig"); return; }
+  const L = cur.lines[qCur.i], tk = toks(L.s).find(t => t.w.toLowerCase() === qCur.f), pe = pickEntry(qCur.f), g = pe ? DICT.lemmas[pe[0]][1] : "";
+  $("qProg").textContent = (qCur.total - qq.length) + " / " + qCur.total + " · " + (vq[qCur.f] || 0) + " av 2 riktige";
+  $("qSent").textContent = tk ? L.s.slice(0, tk.i) + "_____" + L.s.slice(tk.i + tk.w.length) : L.s;
+  $("qHint").textContent = "Betydning: " + (g || "(ukjent i ordboken)") + " · Hvilket ord mangler?";
+  $("qShow").hidden = false; $("qRate").hidden = true;
+}
+function renderQuizBtn(){ if (!cur) return; const n = testable().length; $("qStart").textContent = n ? "Test ordene (" + n + ")" : "Test ordene: ingen lagrede eller delvis kjente ord ennå"; $("qStart").disabled = !n; }
+$("qStart").addEventListener("click", () => { qq = testable(); const tot = qq.length; qq.forEach(x => x.total = tot); if (!tot) return; $("quiz").hidden = false; $("qStart").hidden = true; qNext(); });
+$("qEnd").addEventListener("click", () => { qq = []; qCur = null; $("quiz").hidden = true; $("qStart").hidden = false; renderQuizBtn(); });
+$("qShow").addEventListener("click", () => {
+  const L = cur.lines[qCur.i]; $("qSent").textContent = ""; const tk = toks(L.s).find(t => t.w.toLowerCase() === qCur.f);
+  if (tk) { $("qSent").append(L.s.slice(0, tk.i)); const m = document.createElement("mark"); m.textContent = tk.w; $("qSent").append(m, L.s.slice(tk.i + tk.w.length)); } else $("qSent").textContent = L.s;
+  $("qShow").hidden = true; $("qRate").hidden = false;
+});
+$("qClip").addEventListener("click", () => { const i = qCur.i, n = cur.lines[i + 1]; seekLine(i, true); stopAt = endOf(i); stopLine = i; });
+function qRate(good){
+  const f = qCur.f; try { if (player && isPlaying()) player.pauseVideo(); } catch (e) {}
+  if (good) { vq[f] = (vq[f] || 0) + 1; if (vq[f] >= 2) { marks[f] = 1; delete saved[f]; delete vq[f]; LS.set("marks", marks); LS.set("saved", saved); rebuildKnown(); renderLines(); renderStats(); toast("«" + f + "» regnes nå som kjent ✓"); } }
+  else { vq[f] = 0; if (!qCur.again) { qCur.again = true; qq.push(qCur); } }
+  LS.set("vq", vq); qNext();
+}
+$("qYes").addEventListener("click", () => qRate(true)); $("qNo").addEventListener("click", () => qRate(false));
+function alignTr(lines, tl){          // each Russian line gets the translation lines that start within its time span
+  return lines.map((L, i) => { const a = L.t - 0.3, b = i + 1 < lines.length ? lines[i + 1].t - 0.3 : 1e9, m = tl.filter(x => x.t >= a && x.t < b).map(x => x.s).join(" ").trim(); return m ? Object.assign({}, L, {tr: m}) : L; });
+}
+let showTr = !!LS.get("showTr", false);
+function syncTr(){ const has = cur && cur.lines.some(L => L.tr); $("cTr").hidden = !has; $("cTr").setAttribute("aria-pressed", has && showTr); }
+$("cTr").addEventListener("click", () => { showTr = !showTr; LS.set("showTr", showTr); syncTr(); renderCap(); renderLines(); });
+function openWatch(id){
+  cur = videos[id]; if (!cur) return; $("pre").dataset.o = ""; $("again").hidden = true;
+  $("home").hidden = true; $("watchView").hidden = false; $("sheet").hidden = true;
+  $("wTitle").textContent = cur.title; idx = -1; stopAt = null;
+  syncTr(); renderLines(); renderStats(); renderPre(); $("quiz").hidden = true; $("qStart").hidden = false; renderQuizBtn(); window.scrollTo({top: 0}); $("rvLink").href = rvHref();
+  makePlayer();
+}
+function closeWatch(){
+  LS.set("watch", watchLog); watchDirty = 0;
+  clearInterval(poll); poll = null;
+  if (player && player.destroy) { try { player.destroy(); } catch (e) {} }
+  player = null; $("stage").querySelector("#yt") || $("stage").prepend(Object.assign(document.createElement("div"), {id: "yt"}));
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  cur = null; $("watchView").hidden = true; $("home").hidden = false; renderHome();
+}
+function renderStats(){ const a = analyze(cur); $("wCov").textContent = (a.open ? "minst " : "") + a.pct + " %"; $("wUnk").textContent = a.unk; $("wInfo").textContent = cur.lines.length + " linjer"; }
+function renderLines(){
+  const box = $("lines"); box.textContent = "";
+  cur.lines.forEach((L, i) => {
+    const row = document.createElement("div"); row.className = "ln" + (i === idx ? " cur" : "");
+    const ts = document.createElement("button"); ts.className = "ts"; ts.textContent = fmt(L.t);
+    ts.addEventListener("click", () => seekLine(i, true));
+    const tx = document.createElement("span"); tx.className = "tx"; fillLine(tx, L.s, (f, sp) => { selPos = {i, k: +sp.dataset.k}; openWord(f); });
+    if (showTr && L.tr) { const t2 = document.createElement("div"); t2.className = "trl"; t2.textContent = L.tr; tx.append(t2); }
+    row.append(ts, tx); box.append(row);
+  });
+}
+function renderCap(){
+  const el = $("cap");
+  if (idx < 0) { el.textContent = ""; return; }
+  fillLine(el, cur.lines[idx].s, (f, sp) => { document.querySelectorAll("#cap .w.sel").forEach(x => x.classList.remove("sel")); sp.classList.add("sel"); selPos = {i: idx, k: +sp.dataset.k}; openWord(f); });
+  if (showTr && cur.lines[idx].tr) { const t2 = document.createElement("div"); t2.className = "trl"; t2.textContent = cur.lines[idx].tr; el.append(t2); }
+}
+function lineAt(t){ let k = -1; for (let i = 0; i < cur.lines.length; i++) { if (cur.lines[i].t <= t + 0.05) k = i; else break; } return k; }
+function setIdx(k){
+  if (k === idx) return;
+  const rows = $("lines").children;
+  if (rows[idx]) rows[idx].classList.remove("cur");
+  idx = k; lastNow = -1; renderCap();
+  if (rows[idx]) { rows[idx].classList.add("cur"); if (!document.fullscreenElement && $("sheet").hidden) { const box = $("lines"), r = rows[idx]; if (r.offsetTop < box.scrollTop || r.offsetTop + r.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTo({top: r.offsetTop - box.clientHeight / 2, behavior: "smooth"}); } }
+}
+let hlOn = LS.get("hl", true), lastNow = -1, wCache = new WeakMap();
+function lineWords(i){            // word start times for line i: from the subtitle pieces if we have them, else estimated over the whole line
+  const L = cur.lines[i]; if (L.w && L.w.length === toks(L.s).length) return L.w;
+  if (!wCache.has(L)) { const n = cur.lines[i + 1]; wCache.set(L, wordTimes(L.s, L.t, L.e != null ? L.e : n ? n.t : L.t + 3)); }
+  return wCache.get(L);
+}
+function markNow(t){
+  if (!hlOn || idx < 0) { if (lastNow !== -1) { document.querySelectorAll("#cap .now").forEach(x => x.classList.remove("now")); lastNow = -1; } return; }
+  const ws = lineWords(idx); let k = -1; for (let j = 0; j < ws.length; j++) { if (ws[j] <= t + 0.05) k = j; else break; }
+  const sp = $("cap").querySelectorAll(":scope > span"); if (k === lastNow && sp[k] && sp[k].classList.contains("now")) return;
+  sp.forEach((x, j) => x.classList.toggle("now", j === k)); lastNow = k;
+}
+let stopT = null, stopLine = null, resumeAt = null, resumeLine = null;
+/* pausing at the end of a sentence: subtitle timings are not exact, so the pause comes a little late (SAFE) and the caption keeps the
+   sentence being finished; when you go on, the video jumps back to where the next sentence starts, so nothing is skipped or cut */
+function doStop(){
+  stopAt = null; clearTimeout(stopT); stopT = null; try { player.pauseVideo(); } catch (e) {}
+  if (stopLine != null && cur && cur.lines[stopLine + 1]) { resumeAt = cur.lines[stopLine + 1].t; resumeLine = stopLine; }
+  stopLine = null;
+}
+function showProg(t){
+  let d = 0; try { d = player.getDuration() || 0; } catch (e) {}
+  if (!d && cur && cur.lines.length) d = cur.lines[cur.lines.length - 1].t + 5;
+  const pc = d ? Math.min(100, Math.max(0, t / d * 100)) : 0, b = document.querySelector("#pbar i"); if (b) b.style.width = pc.toFixed(1) + "%";
+  const el = $("ptime"); if (el) el.textContent = fmt(t) + " / " + fmt(d) + (d ? " · " + Math.round(pc) + " %" : "");
+}
+function tick(){
+  if (!player || !ytReady || !cur) return;
+  let t = 0; try { t = player.getCurrentTime() || 0; } catch (e) { return; }
+  if (wordPlay) {                   // playing one word from the popup
+    if (isPlaying() && t >= wordPlay.s - 0.3) { if (t >= wordPlay.end) endWord(); else if (!wordPlay.T && wordPlay.end - t < 0.25) wordPlay.T = setTimeout(endWord, (wordPlay.end - t) / (slow ? 0.75 : 1) * 1000); }
+    markNow(t); return;
+  }
+  if (stopAt != null && t >= stopAt) { doStop(); return; }
+  if (stopAt != null && !stopT && stopAt - t < 0.25 && isPlaying()) { const at = stopAt, ms = (stopAt - t) / (slow ? 0.75 : 1) * 1000; stopT = setTimeout(() => { stopT = null; if (stopAt === at) doStop(); }, Math.max(0, ms)); }
+  let k = lineAt(t);
+  if (stopAt != null && stopLine != null && k > stopLine) k = stopLine;                 // keep the sentence being finished
+  if (resumeAt != null && resumeLine != null && !isPlaying() && k > resumeLine) k = resumeLine;
+  setIdx(k); markNow(t); showProg(t);
+  if (idx !== lastRv) { lastRv = idx; $("rvLink").href = rvHref(); }
+  const pl = isPlaying(); if (pl) addWatch(0.12); $("watch").classList.toggle("paused", !pl); if (!pl) $("watch").classList.remove("idle");
+  if (pmode !== "off" && stopAt == null && isPlaying() && idx >= 0 && idx !== calcIdx) { calcIdx = idx; stopAt = calcStop(idx, t); }
+}
+/* pause modes: "all" = after every line, "unk" = only after lines that contain a word you do not know, "off" */
+const lineHasUnknown = i => { const L = cur.lines[i]; return !!L && toks(L.s).some((t, k) => !isName(t, k) && state(t.w.toLowerCase()) !== 1); };
+/* where a line ends: its own end time when the transcript has one (srt/vtt), else where the next line starts; plus your own margin
+   («Setningsslutt», −0.8 … +1.0 s), because transcripts are often rounded to whole seconds */
+let tail = 0; /* fixed: no manual adjusting */
+const SAFE = 0.4, PRE = 0.12;   // a little late on purpose: the next sentence is replayed from its start when you go on
+function endOf(j){
+  const L = cur.lines[j], n = cur.lines[j + 1];
+  if (L.e != null) {                // srt/vtt: exact times, so pause right before the next sentence starts (never into it)
+    if (!n) return L.e + 0.3;
+    return Math.max(L.t + 0.3, Math.min(L.e + 0.25, n.t - PRE));
+  }
+  const base = n ? n.t : L.t + 5;    // pasted transcript (often whole seconds): a little late, the next sentence is replayed from its start
+  return Math.max(L.t + 0.3, base + (n ? SAFE : 0) + tail);
+}
+function calcStop(i, t){          // the time to pause at: just before the line after the first line (from i on) that deserves a pause
+  stopLine = null;
+  if (pmode === "off" || i < 0) return null;
+  for (let j = i; j < cur.lines.length; j++) {
+    if (pmode === "unk" && !lineHasUnknown(j)) continue;
+    const n = cur.lines[j + 1];
+    if (!n) return null;
+    if (endOf(j) - t < 0.5) continue;   // too late to stop at the end of this line
+    stopLine = j; return endOf(j);
+  }
+  return null;
+}
+function play(){
+  if (!player || !ytReady) return;
+  let t = 0; try { t = player.getCurrentTime() || 0; } catch (e) {}
+  if (resumeAt != null && t > resumeAt - 1 && t < resumeAt + 4) {             // go on from the start of the next sentence
+    t = resumeAt; try { player.seekTo(Math.max(0, t - 0.05), true); } catch (e) {} setIdx(resumeLine + 1);
+  }
+  resumeAt = null; resumeLine = null;
+  calcIdx = idx; stopAt = calcStop(idx, t);
+  player.playVideo(); setTimeout(noYtCaptions, 800);
+}
+const isPlaying = () => { try { return player.getPlayerState() === 1; } catch (e) { return false; } };
+function seekLine(i, play){
+  if (!player || !ytReady || !cur.lines[i]) return;
+  resumeAt = null; resumeLine = null; calcIdx = i; stopAt = calcStop(i, cur.lines[i].t);
+  player.seekTo(Math.max(0, cur.lines[i].t - 0.05), true); setIdx(i);
+  if (play) player.playVideo();
+}
+function loadYT(){
+  return new Promise(res => {
+    if (window.YT && YT.Player) return res();
+    window.onYouTubeIframeAPIReady = () => res();
+    const s = document.createElement("script"); s.src = "https://www.youtube.com/iframe_api"; document.head.append(s);
+  });
+}
+async function makePlayer(){
+  await loadYT();
+  if (!cur) return;
+  ytReady = false;
+  player = new YT.Player("yt", {videoId: cur.vid, playerVars: {playsinline: 1, rel: 0, controls: 0, cc_load_policy: 0, iv_load_policy: 3, modestbranding: 1, disablekb: 1},
+    events: {onReady: () => { ytReady = true; noYtCaptions(); if (slow) player.setPlaybackRate(0.75); if (startT != null) { const k = lineAt(startT + 0.2); startT = null; if (k >= 0) seekLine(k, true); } },
+             onStateChange: ev => { if (ev && ev.data === 0) showAgain(); noYtCaptions(); setTimeout(noYtCaptions, 400); setTimeout(noYtCaptions, 1500); },
+             onError: e => toast("YouTube vil ikke spille denne videoen her (feil " + e.data + ")")}});
+  clearInterval(poll); poll = setInterval(tick, 120);
+}
+/* immediate re-watch (Lo 2024: seeing the clip again right after the first time gave the largest vocabulary gains) */
+function showAgain(){ $("again").hidden = false; renderCap(); }
+$("againGo").addEventListener("click", () => { $("again").hidden = true; rewatch[cur.id] = (rewatch[cur.id] || 0) + 1; LS.set("rewatch", rewatch); stopAt = null; calcIdx = -1; try { player.seekTo(0, true); } catch (e) {} play(); renderProg(); });
+$("againNo").addEventListener("click", () => { $("again").hidden = true; });
+function noYtCaptions(){ try { player.unloadModule("captions"); player.unloadModule("cc"); } catch (e) {} }   // our subtitles only
+let startT = null;
+let idleT = null, lastRv = -2;
+function poke(){ const w = $("watch"); w.classList.remove("idle"); clearTimeout(idleT); idleT = setTimeout(() => { if (isPlaying()) w.classList.add("idle"); }, 3000); }
+document.querySelector(".ctl").addEventListener("click", poke, true);
+function toggle(){ poke(); noYtCaptions(); if (!player || !ytReady) return; if (isPlaying()) player.pauseVideo(); else play(); }
+/* tap the picture = play/pause; double tap on the left half = 10 s back, on the right half = 10 s forward */
+let zoneT = null, zoneSide = 0;
+$("tapzone").addEventListener("click", ev => {
+  const r = $("tapzone").getBoundingClientRect(), side = ev.clientX < r.left + r.width / 2 ? -1 : 1;
+  if (zoneT && zoneSide === side) { clearTimeout(zoneT); zoneT = null; let t = 0; try { t = player.getCurrentTime() || 0; } catch (e) {} if (player && ytReady) { jumpTo(t + side * 10); toast(side < 0 ? "−10 s" : "+10 s"); } return; }
+  clearTimeout(zoneT); zoneSide = side; zoneT = setTimeout(() => { zoneT = null; toggle(); }, 280);
+});
+$("cPlay").addEventListener("click", toggle);
+function jumpTo(t){          // any time in the video (not only line starts); keeps playing if it was playing
+  if (!player || !ytReady) return; poke();
+  t = Math.max(0, t); resumeAt = null; resumeLine = null; const k = lineAt(t); calcIdx = k; stopAt = calcStop(k, t);
+  try { player.seekTo(t, true); } catch (e) {} setIdx(k); play();
+}
+document.querySelector(".ctl").addEventListener("click", ev => {       // feedback for every button, also in fullscreen (where the normal toast is not visible)
+  const b = ev.target.closest("button"); if (!b) return; b.classList.add("hit"); setTimeout(() => b.classList.remove("hit"), 220);
+  setTimeout(() => { const l = b.getAttribute("aria-label") || ""; if (!l || b.id === "cPlay") return; toast(l + (b.hasAttribute("aria-pressed") ? (b.getAttribute("aria-pressed") === "true" ? ": på" : ": av") : "")); }, 0);
+});
+$("hlOn").checked = hlOn; $("hlOn").addEventListener("change", () => { hlOn = $("hlOn").checked; LS.set("hl", hlOn); lastNow = -2; });
+
+$("cStart").addEventListener("click", () => jumpTo(0));
+$("cBack10").addEventListener("click", () => { let t = 0; try { t = player.getCurrentTime() || 0; } catch (e) {} jumpTo(t - 10); });
+$("cRep").addEventListener("click", () => { const i = Math.max(0, idx); seekLine(i, true); stopAt = endOf(i); stopLine = i; });   // always plays to the end of the line, whatever the pause mode
+$("cPrev").addEventListener("click", () => seekLine(Math.max(0, idx - 1), true));
+$("cNext").addEventListener("click", () => seekLine(Math.min(cur.lines.length - 1, idx + 1), true));
+const PM = {all: ["linje", "Pauser etter hver linje"], unk: ["ukjent", "Pauser bare etter linjer med ukjente ord"], off: ["av", "Spiller videre uten pause"]};
+function showPM(){ const b = $("cAuto"); b.setAttribute("aria-pressed", pmode !== "off"); b.querySelector(".lbl").textContent = " " + PM[pmode][0]; b.setAttribute("aria-label", PM[pmode][1]); }
+showPM();
+$("cAuto").addEventListener("click", () => { pmode = pmode === "all" ? "unk" : pmode === "unk" ? "off" : "all"; LS.set("pmode", pmode); showPM(); stopAt = null; calcIdx = -9; toast(PM[pmode][1]); });
+$("cSlow").addEventListener("click", () => { slow = !slow; $("cSlow").setAttribute("aria-pressed", slow); try { player.setPlaybackRate(slow ? 0.75 : 1); } catch (e) {} });
+$("cFull").addEventListener("click", async () => {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else { await $("watch").requestFullscreen(); try { await screen.orientation.lock("landscape"); } catch (e) {} }
+  } catch (e) { toast("Fullskjerm virker ikke i denne nettleseren"); }
+});
+$("back").addEventListener("click", closeWatch);
+$("del").addEventListener("click", () => {
+  const b = $("del"); if (!b.dataset.sure) { b.dataset.sure = 1; b.textContent = "Trykk igjen"; setTimeout(() => { delete b.dataset.sure; b.textContent = "Fjern"; }, 3000); return; }
+  if (!gone.includes(cur.id)) gone.push(cur.id); LS.set("gone", gone); delete videos[cur.id]; LS.set("videos", videos); closeWatch();
+});
+
+/* ---------- word popup ---------- */
+let pin = LS.get("pin", {});            // the reading you picked for a form (index into entries(f)), used in the popup and on saved cards
+function readings(f){ const e = entries(f), seen = new Set(), out = []; e.forEach((x, i) => { const k = strip(DICT.lemmas[x[0]][0]) + "|" + DICT.lemmas[x[0]][1]; if (!seen.has(k)) { seen.add(k); out.push(i); } }); return out; }
+function pickEntry(f){ const e = entries(f); return e.length ? e[Math.min(pin[f] != null ? pin[f] : 0, e.length - 1)] : null; }
+/* Latin letters, Norwegian-style, keeping the stress mark: вставля́ю → vstavljáju */
+const TL = {а:"a",б:"b",в:"v",г:"g",д:"d",е:"e",ё:"jo",ж:"zj",з:"z",и:"i",й:"j",к:"k",л:"l",м:"m",н:"n",о:"o",п:"p",р:"r",с:"s",т:"t",у:"u",ф:"f",х:"kh",ц:"ts",ч:"tsj",ш:"sj",щ:"sjtsj",ъ:"",ы:"y",ь:"",э:"e",ю:"ju",я:"ja"};
+function translit(w){
+  let out = "", prev = "";
+  for (const ch of String(w)) {
+    const lo = ch.toLowerCase();
+    if (ch === ACUTE) { out = out.replace(/([aeiouy])([^aeiouy]*)$/i, "$1" + ACUTE + "$2"); continue; }
+    let r = TL[lo]; if (r == null) { out += ch; prev = ""; continue; }
+    if (lo === "е" && (!prev || /[аеёиоуыэюяъь]/.test(prev))) r = "je";
+    if (ch !== lo && r) r = r[0].toUpperCase() + r.slice(1);
+    out += r; prev = lo;
+  }
+  return out.normalize("NFC");
+}
+/* only the first few meanings: the dictionary lists the common ones first */
+function shortG(g, n){ if (!g) return "–"; const p = String(g).split(/\s*[,;]\s*/).filter(Boolean); return p.slice(0, n).join(", "); }
+let selPos = null, wordPlay = null;   // which word in which line the popup is about; the word being played
+function playWord(){
+  if (!selPos || !cur || !player || !ytReady) return;
+  const {i, k} = selPos, L = cur.lines[i], n = cur.lines[i + 1], ws = lineWords(i); if (!L || ws[k] == null) return;
+  const s0 = ws[k]; let end = k + 1 < ws.length ? ws[k + 1] : L.e != null ? L.e : n ? n.t : s0 + 1; end = Math.min(end + 0.08, s0 + 1.6);
+  let back = 0; try { back = player.getCurrentTime() || 0; } catch (e) {}
+  if (wordPlay) { clearTimeout(wordPlay.T); clearTimeout(wordPlay.guard); back = wordPlay.back; }
+  else { wordPlay = {back, stop: stopAt}; }
+  stopAt = null; clearTimeout(stopT); stopT = null;
+  Object.assign(wordPlay, {s: s0, end, T: null, guard: setTimeout(endWord, 5000)});
+  try { player.seekTo(Math.max(0, s0 - 0.08), true); player.playVideo(); } catch (e) {}
+}
+function endWord(){
+  if (!wordPlay) return; const w = wordPlay; wordPlay = null; clearTimeout(w.T); clearTimeout(w.guard);
+  try { player.pauseVideo(); player.seekTo(w.back, true); } catch (e) {}
+  stopAt = w.stop;
+}
+function openWord(f){
+  selForm = f;
+  if (isPlaying() && !wordPlay) { resume = true; player.pauseVideo(); }
+  const e = entries(f);
+  if (e.length) {
+    const [li, accForm] = pickEntry(f), L = DICT.lemmas[li];
+    $("sF").textContent = accForm || f; $("sT").textContent = translit(accForm || f); $("sG").textContent = shortG(L[1], 3);
+    $("sL").textContent = strip(L[0]) !== f.replace(/ё/g, "е") && strip(L[0]) !== f ? "grunnform: " + L[0] : "";
+    const rd = readings(f), box = $("sAlt"); box.textContent = ""; box.hidden = rd.length < 2;
+    if (rd.length > 1) {
+      const cu = Math.min(pin[f] != null ? pin[f] : 0, e.length - 1), hint = document.createElement("div"); hint.className = "l"; hint.textContent = "Flere mulige betydninger. Velg den som passer i setningen:"; box.append(hint);
+      rd.slice(0, 4).forEach(i => { const o = DICT.lemmas[e[i][0]], b = document.createElement("button"); b.className = "alt"; b.setAttribute("aria-pressed", i === cu || (!rd.includes(cu) && i === rd[0]));
+        b.textContent = o[0] + " – " + shortG(o[1], 2); b.addEventListener("click", () => { pin[f] = i; LS.set("pin", pin); if (saved[f]) { delete saved[f]; saveWord(f, idx); LS.set("saved", saved); } openWord(f); renderPre(); }); box.append(b); });
+    }
+  } else { $("sAlt").hidden = true; $("sF").textContent = f; $("sT").textContent = translit(f); $("sG").textContent = "Ikke i ordboken"; $("sL").textContent = ""; }
+  const st = state(f);
+  [["mU", 0], ["mP", 2], ["mK", 1]].forEach(([id, s]) => $(id).setAttribute("aria-pressed", st === s));
+  $("sSave").textContent = saved[f] ? "✓ Lagret til øving" : "＋ Øv";
+  $("sHear").hidden = !(selPos && cur && cur.lines[selPos.i]);
+  $("sheet").hidden = false;
+}
+$("sHear").addEventListener("click", ev => { ev.stopPropagation(); playWord(); });
+$("sheet").addEventListener("click", ev => { if (ev.target === $("sheet")) closeWord(); });
+function closeWord(){
+  if (wordPlay) endWord();
+  selPos = null;
+  $("sheet").hidden = true; document.querySelectorAll("#cap .w.sel").forEach(x => x.classList.remove("sel"));
+  if (resume && player) { resume = false; play(); }
+}
+function mark(s){
+  if (!selForm) return;
+  marks[selForm] = s; LS.set("marks", marks);
+  if (s === 1) delete saved[selForm], LS.set("saved", saved);
+  rebuildKnown(); renderCap(); renderLines(); renderStats(); renderPre(); openWord(selForm);
+  toast(selForm + (s === 1 ? " · kjent ✓" : s === 2 ? " · delvis kjent" : " · ukjent"));
+}
+$("mU").addEventListener("click", () => mark(0));
+$("mP").addEventListener("click", () => mark(2));
+$("mK").addEventListener("click", () => mark(1));
+function saveWord(f, i){      // i = line where the word occurs: sentence + time follow the card, so the app can replay the clip
+  const e = entries(f), pe = pickEntry(f), L = pe ? DICT.lemmas[pe[0]] : null, ln = i >= 0 ? cur.lines[i] : null;
+  saved[f] = {a: pe ? pe[1] : f, l: L ? L[0] : "", g: L ? L[1] : "", s: ln ? ln.s : "", v: cur.id, t: ln && ln.t != null ? Math.floor(ln.t) : null, at: new Date().toISOString()};
+}
+/* «new words in this video»: the unknown words that occur most often, so you can learn them before watching (Durbahn et al. 2024: more known words = better comprehension) */
+function preWords(n){
+  const m = {};
+  cur.lines.forEach((L, i) => toks(L.s).forEach((t, k) => { if (isName(t, k)) return; const f = t.w.toLowerCase(); if (state(f) === 1 || f in marks) return; const o = m[f] || (m[f] = {f, n: 0, i}); o.n++; }));
+  return Object.values(m).map(o => { const pe = pickEntry(o.f), L = pe ? DICT.lemmas[pe[0]] : null; o.g = L ? L[1] : ""; o.r = L && L[2] ? L[2] : 1e9; return o; })
+    .sort((a, b) => b.n - a.n || a.r - b.r).slice(0, n);
+}
+function renderPre(){
+  if (!cur) return;
+  const a = analyze(cur), ws = preWords(15), box = $("preList"); box.textContent = "";
+  let total = 0; cur.lines.forEach(L => toks(L.s).forEach((t, k) => { if (!isName(t, k)) total++; }));
+  const gain = ws.reduce((x, o) => x + o.n, 0), after = total ? Math.min(100, Math.round((a.pct * total / 100 + gain) / total * 100)) : a.pct;
+  $("preSum").textContent = a.open ? "Sjekk ordene (" + a.open + " igjen)" : "Ordene er sjekket ✓";
+  $("preTxt").textContent = a.open
+    ? "Så langt kjenner du minst " + a.pct + " % av ordene (bare ord du har merket). Svar Kjent eller Ukjent på ordene under, hyppigste først, så blir tallet nøyaktig. Anslag fra studier av dokumentarklipp: minst ca. 80 % gir hovedinnholdet, ca. 95 % gir best forståelse."
+    : "Du kjenner " + a.pct + " % av ordene i denne videoen. Anslag fra studier av dokumentarklipp: minst ca. 80 % gir hovedinnholdet, ca. 95 % gir best forståelse. Dette er et estimat. Øv ordene du har lagret i «Russisk hver dag» før du ser.";
+  ws.forEach(o => {
+    const r = document.createElement("div"); r.className = "row";
+    const w = document.createElement("span"); w.className = "rw"; w.textContent = o.f;
+    const g = document.createElement("span"); g.className = "rg"; g.textContent = (o.g || "–") + " · " + o.n + "×";
+    const ub = document.createElement("button"); ub.className = "rb"; ub.textContent = "Ukjent";
+    ub.addEventListener("click", () => { marks[o.f] = 0; LS.set("marks", marks); rebuildKnown(); renderLines(); renderStats(); renderPre(); });
+    const kb = document.createElement("button"); kb.className = "rb"; kb.textContent = "Kjent";
+    kb.addEventListener("click", () => { marks[o.f] = 1; LS.set("marks", marks); delete saved[o.f]; LS.set("saved", saved); rebuildKnown(); renderLines(); renderStats(); renderPre(); });
+    const sb = document.createElement("button"); sb.className = "rb"; sb.setAttribute("aria-pressed", !!saved[o.f]); sb.textContent = saved[o.f] ? "✓ Øv" : "＋ Øv";
+    sb.addEventListener("click", () => { marks[o.f] = 0; LS.set("marks", marks); saveWord(o.f, o.i); LS.set("saved", saved); rebuildKnown(); renderLines(); renderStats(); renderPre(); });
+    r.append(w, g, kb, ub, sb); box.append(r);
+  });
+  renderQuizBtn(); $("preAll").hidden = !ws.length; if (a.open && !$("pre").dataset.o) { $("pre").open = true; $("pre").dataset.o = "1"; }
+}
+$("preAll").addEventListener("click", () => { preWords(15).forEach(o => { marks[o.f] = 0; if (!saved[o.f]) saveWord(o.f, o.i); }); LS.set("marks", marks); LS.set("saved", saved); rebuildKnown(); renderLines(); renderStats(); renderPre(); toast("Lagret til øving i appen"); });
+$("sSave").addEventListener("click", () => {
+  if (!selForm) return;
+  if (saved[selForm]) delete saved[selForm];
+  else saveWord(selForm, idx);
+  LS.set("saved", saved); openWord(selForm); renderPre();
+});
+$("sX").addEventListener("click", closeWord);
+
+/* ---------- cloud sync: one JSON file on a branch of a private repo (GitHub contents API) ---------- */
+const SYNC_REPO = "hakanoa/russisk", SYNC_BRANCH = "site-data", SYNC_FILE = "site-state.json";
+let revived = LS.get("revived", []);   // removed earlier, added again: the cloud's «removed» mark must not delete it
+let SYNC = LS.get("sync", null), syncTimer = null, syncBusy = false, gone = LS.get("gone", []);
+const b64e = t => btoa(unescape(encodeURIComponent(t))), b64d = t => decodeURIComponent(escape(atob(t.replace(/\s+/g, ""))));
+const _lsSet = LS.set;
+LS.set = function(k, v){ _lsSet.call(LS, k, v); if (SYNC && (k === "videos" || k === "marks" || k === "saved" || k === "gone")) { clearTimeout(syncTimer); syncTimer = setTimeout(syncNow, 2500); } };
+function syncStatus(t, bad){
+  const e = $("syncInfo"); if (e && SYNC) { e.textContent = t; e.style.color = bad ? "#c0392b" : ""; }
+  if (SYNC) { if (bad) LS.set("syncBad", {at: Date.now(), msg: String(t)}); else if (/^Lagret/.test(t)) { LS.set("syncBad", null); LS.set("syncOkAt", Date.now()); } }
+  syncBanner();
+}
+/* a red line at the top when the backup is not working: last attempt failed, nothing saved for a day, or the token is about to expire */
+function syncBanner(){
+  const b = $("syncBanner"); if (!b) return; let m = "";
+  if (!SYNC) m = "Skylagring er av: videoer og ord ligger bare i denne nettleseren. Slå på under «Lagre i skyen».";
+  else {
+    const exp = LS.get("syncExp", "2026-12-23"), days = Math.ceil((new Date(exp + "T23:59:59") - Date.now()) / 864e5), bad = LS.get("syncBad", null), ok = LS.get("syncOkAt", 0);
+    if (days <= 0) m = "Tokenet er utløpt. Lag et nytt og lim det inn under «Lagre i skyen», ellers lagres ingenting.";
+    else if (bad) m = "Siste synk feilet: " + bad.msg.replace(/^Synk feilet: /, "") + (ok ? " (sist lagret " + new Date(ok).toLocaleString("nb-NO", {day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"}) + ")" : "");
+    else if (ok && Date.now() - ok > 864e5) m = "Ingenting er lagret i skyen siste døgn. Åpne siden og trykk «Synk nå».";
+    else if (days <= 14) m = "Tokenet utløper om " + days + " dag" + (days === 1 ? "" : "er") + ". Lag et nytt i god tid og lim det inn under «Lagre i skyen».";
+  }
+  b.textContent = m; b.hidden = !m;
+}
+function syncUi(){ $("syncOff").hidden = !!SYNC; $("syncOnBox").hidden = !SYNC; }
+function mergeRemote(r){
+  if (!r || typeof r !== "object") return false;
+  let changed = false;
+  (r.gone || []).forEach(id => { if (!gone.includes(id) && !revived.includes(id)) { gone.push(id); changed = true; } });
+  Object.values(r.videos || {}).forEach(v => { if (v && v.id && !gone.includes(v.id) && !videos[v.id] && Array.isArray(v.lines)) { videos[v.id] = v; changed = true; } });
+  gone.forEach(id => { if (videos[id]) { delete videos[id]; changed = true; } });
+  Object.entries(r.marks || {}).forEach(([f, x]) => { if (!(f in marks)) { marks[f] = x; changed = true; } });
+  Object.entries(r.saved || {}).forEach(([f, x]) => { if (!(f in saved)) { saved[f] = x; changed = true; } });
+  return changed;
+}
+async function ghFile(method, body){
+  const u = "https://api.github.com/repos/" + SYNC_REPO + "/contents/" + SYNC_FILE + (method === "GET" ? "?ref=" + SYNC_BRANCH + "&t=" + Date.now() : "");
+  return fetch(u, {method, cache: "no-store", headers: {Authorization: "Bearer " + SYNC.token, Accept: "application/vnd.github+json"}, body: body ? JSON.stringify(body) : undefined});
+}
+let syncAgain = false, lastPut = LS.get("lastput", null);   // {sha, at}: GitHub can serve a stale file right after a write
+async function syncNow(retry){
+  if (!SYNC) return;
+  if (syncBusy) { syncAgain = true; return; }
+  syncBusy = true;
+  try {
+    let sha = null, r = await ghFile("GET");
+    if (r.status === 401 || r.status === 403) throw new Error("Tokenet er ugyldig eller mangler tilgang");
+    if (r.status === 200) { const j = await r.json(); sha = j.sha; if (lastPut && lastPut.sha !== j.sha && Date.now() - lastPut.ms < 20000) sha = lastPut.sha; if (mergeRemote(JSON.parse(b64d(j.content)))) { _lsSet.call(LS, "videos", videos); _lsSet.call(LS, "marks", marks); _lsSet.call(LS, "saved", saved); _lsSet.call(LS, "gone", gone); rebuildKnown(); renderHome(); } }
+    else if (r.status !== 404) throw new Error("GitHub svarte " + r.status);
+    const body = {message: "Videosiden: synk", branch: SYNC_BRANCH, content: b64e(JSON.stringify({v: 1, at: new Date().toISOString(), videos, marks, saved, gone}))};
+    if (sha) body.sha = sha;
+    r = await ghFile("PUT", body);
+    if ((r.status === 409 || r.status === 422) && (retry || 0) < 3) { lastPut = null; _lsSet.call(LS, "lastput", null); syncBusy = false;   // our remembered sha was the wrong one: next time trust the fresh GET
+    await new Promise(z => setTimeout(z, 700)); return syncNow((retry || 0) + 1); }
+    if (!r.ok) { let m = ""; try { m = (await r.json()).message || ""; } catch (e) {} throw new Error(r.status === 404 ? "Fant ikke grenen «" + SYNC_BRANCH + "»" : "Kunne ikke lagre (" + r.status + (m ? ": " + m.slice(0, 120) : "") + ")"); }
+    try { const j = await r.json(); if (j && j.content && j.content.sha) { lastPut = {sha: j.content.sha, ms: Date.now()}; _lsSet.call(LS, "lastput", lastPut); } } catch (e) {}
+    if (revived.length) { revived = []; _lsSet.call(LS, "revived", []); }
+    const d = new Date(); syncStatus("Lagret i skyen kl. " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") + " · " + Object.keys(videos).length + " video(er)");
+  } catch (e) { syncStatus("Synk feilet: " + (e.message || e), true); }
+  syncBusy = false;
+  if (syncAgain) { syncAgain = false; syncNow(); }
+}
+$("syncOn").addEventListener("click", () => {
+  const t = $("syncTok").value.trim(); if (!t) { toast("Lim inn tokenet først"); return; }
+  SYNC = {token: t}; LS.set("sync", SYNC); $("syncTok").value = ""; syncUi(); syncStatus("Synkroniserer …"); syncNow();
+});
+$("syncNowBtn").addEventListener("click", () => syncNow());
+$("syncExp").value = LS.get("syncExp", "2026-12-23"); $("syncExp").addEventListener("change", () => { LS.set("syncExp", $("syncExp").value || "2026-12-23"); syncBanner(); });
+$("syncOffBtn").addEventListener("click", () => { SYNC = null; LS.set("sync", null); syncUi(); $("syncInfo").textContent = "Synk er av. Videoene ligger bare i denne nettleseren."; });
+document.addEventListener("visibilitychange", () => { if (document.hidden) { LS.set("watch", watchLog); watchDirty = 0; } if (document.hidden && SYNC) syncNow(); });
+
+/* ---------- start ---------- */
+(async () => {
+  try {
+    DICT = await fetch("dict.json").then(r => r.json());
+    PUBLIC = await fetch("known.json").then(r => r.json()).then(k => k.forms || {}).catch(() => ({}));   // the public word list
+    PASTED = LS.get("known", {}); KNOWN = Object.assign({}, PUBLIC, PASTED);
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}   // ask the browser not to clear the videos
+    $("loadMsg").hidden = true;
+  } catch (e) { $("loadMsg").textContent = "Kunne ikke laste ordboken. Prøv å laste siden på nytt."; }
+  try { if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js"); } catch (e) {}
+  rebuildKnown(); renderHome(); syncUi(); syncBanner();
+  try {                                // shared from YouTube («Del» → this page): fill in the link
+    const q = new URLSearchParams(location.search), shared = (q.get("url") || "") + " " + (q.get("text") || ""), id = ytId(shared);
+    if (id) { $("url").value = "https://www.youtube.com/watch?v=" + id; if (q.get("title") && !$("title").value) $("title").value = q.get("title"); $("addMsg").textContent = "Lenken er fylt inn. Velg undertekstfilen, og trykk «Legg til»."; $("url").scrollIntoView({block: "center"}); history.replaceState(null, "", location.pathname + location.hash); }
+  } catch (e) {}
+  const fromHash = () => {            // #v=<video id>&t=<seconds>: opened from a card in «Russisk hver dag»
+    const m = location.hash.match(/v=([A-Za-z0-9_-]{6,})(?:&t=(\d+))?/); if (!m || cur) return false;
+    if (!videos[m[1]]) return false;
+    startT = m[2] != null ? +m[2] : null; openWatch(m[1]); return true;
+  };
+  if (!fromHash() && SYNC) { try { await syncNow(); } catch (e) {} fromHash(); }
+  else if (SYNC) syncNow();
+})();
+</script>
+</body>
+</html>
